@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>إدارة الطلاب والمجموعات | أ. عبدالعزيز الفيفي</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        :root { --accent: #0284c7; --bg: #f8fafc; --border: #e2e8f0; --dark: #1e293b; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; color: var(--dark); }
+        .admin-box { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid var(--accent); }
+        .input-group { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 20px; }
+        input, select { padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
+        button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th { background: #f1f5f9; padding: 15px; text-align: right; border-bottom: 2px solid var(--border); }
+        td { padding: 12px; border-bottom: 1px solid var(--border); }
+        .btn-del { background: #ef4444; font-size: 0.8rem; }
+        .badge { padding: 4px 8px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; background: #e0f2fe; color: #0369a1; }
+    </style>
+</head>
+<body>
+
+<div class="admin-box">
+    <h2>➕ إضافة طالب للقائمة المعتمدة</h2>
+    <div class="input-group">
+        <input type="text" id="sName" placeholder="الاسم الثلاثي">
+        <input type="email" id="sEmail" placeholder="البريد الوزاري">
+        
+        <select id="sStage">
+            <option value="">-- اختر الصف --</option>
+            <option value="أول ثانوي">أول ثانوي</option>
+            <option value="ثاني ثانوي">ثاني ثانوي</option>
+            <option value="ثالث ثانوي">ثالث ثانوي</option>
+        </select>
+
+        <select id="sClass">
+            <option value="">-- الفصل --</option>
+            <option value="فصل 1">فصل 1</option>
+            <option value="فصل 2">فصل 2</option>
+            <option value="فصل 3">فصل 3</option>
+            <option value="فصل 4">فصل 4</option>
+            <option value="فصل 5">فصل 5</option>
+            <option value="فصل 6">فصل 6</option>
+        </select>
+
+        <button onclick="addStudent()">حفظ الطالب ✅</button>
+    </div>
+
+    <hr>
+
+    <h3>📋 قائمة الطلاب المسموح لهم (حسب الصف والفصل)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>الاسم</th>
+                <th>البريد الوزاري</th>
+                <th>الصف</th>
+                <th>الفصل</th>
+                <th>إجراء</th>
+            </tr>
+        </thead>
+        <tbody id="students-table"></tbody>
+    </table>
+</div>
+
+<script>
+    // إعدادات Firebase الخاصة بك
+    const firebaseConfig = {
+        apiKey: "AIzaSyBkCO7FDQXd89YDf843J4_AtvEFvzzt-R0",
+        authDomain: "aztlg-494c3.firebaseapp.com",
+        projectId: "aztlg-494c3",
+        storageBucket: "aztlg-494c3.firebasestorage.app",
+        messagingSenderId: "597051893949",
+        appId: "1:597051893949:web:de5554ac900317a92b2fd4"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    async function addStudent() {
+        const name = document.getElementById('sName').value.trim();
+        const email = document.getElementById('sEmail').value.toLowerCase().trim();
+        const stage = document.getElementById('sStage').value;
+        const classNum = document.getElementById('sClass').value;
+
+        if(!name || !email || !stage || !classNum) {
+            return alert("يرجى إكمال جميع الخانات (الاسم، الإيميل، الصف، والفصل)");
+        }
+
+        try {
+            await db.collection("allowed_students").doc(email).set({
+                name: name,
+                email: email,
+                stage: stage,
+                class: classNum,
+                addedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            alert("تمت إضافة " + name + " بنجاح.");
+            document.getElementById('sName').value = "";
+            document.getElementById('sEmail').value = "";
+        } catch (e) {
+            alert("حدث خطأ أثناء الحفظ");
+        }
+    }
+
+    // جلب البيانات وعرضها مرتبة حسب الوقت
+    db.collection("allowed_students").orderBy("addedAt", "desc").onSnapshot(snapshot => {
+        let html = "";
+        snapshot.forEach(doc => {
+            const s = doc.data();
+            html += `<tr>
+                <td><strong>${s.name}</strong></td>
+                <td>${s.email}</td>
+                <td><span class="badge">${s.stage}</span></td>
+                <td><span class="badge" style="background:#fef3c7; color:#92400e;">${s.class}</span></td>
+                <td><button class="btn-del" onclick="deleteStudent('${doc.id}')">حذف</button></td>
+            </tr>`;
+        });
+        document.getElementById('students-table').innerHTML = html;
+    });
+
+    async function deleteStudent(id) {
+        if(confirm("هل تريد حذف هذا الطالب من قائمة المسموح لهم؟")) {
+            await db.collection("allowed_students").doc(id).delete();
+        }
+    }
+</script>
+</body>
+</html>
