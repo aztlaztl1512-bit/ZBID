@@ -2,58 +2,51 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة إدارة الوصول ZBID - أ/ عبدالعزيز الفيفي</title>
+    <title>إدارة الوصول المتقدمة - أ/ عبدالعزيز الفيفي</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
-        :root { --maroon: #800000; --gold: #d4af37; --bg: #fdfaf1; }
+        :root { --maroon: #800000; --gold: #d4af37; --bg: #fdfaf1; --danger: #c62828; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; }
-        .admin-card { background: white; max-width: 900px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
+        .admin-card { background: white; max-width: 1000px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
         .header { text-align: center; border-bottom: 2px solid var(--gold); margin-bottom: 20px; }
-        .input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; min-width: 200px; }
-        .btn-add { background: #2e7d32; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; }
         
-        /* تنسيق زر التحديث الجديد */
-        .refresh-btn { 
-            background: var(--gold); 
-            color: var(--maroon); 
-            border: none; 
-            padding: 8px 15px; 
-            border-radius: 5px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            margin-right: 15px;
-            font-size: 0.9rem;
-        }
-        .refresh-btn:hover { opacity: 0.9; }
-
+        .bulk-section { background: #f4f4f4; padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px dashed var(--maroon); }
+        textarea { width: 100%; height: 120px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; resize: none; box-sizing: border-box; }
+        
+        .controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-upload { background: var(--maroon); color: var(--gold); }
+        .btn-delete-all { background: var(--danger); color: white; }
+        .btn-refresh { background: #eee; color: #333; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: var(--maroon); color: var(--gold); padding: 12px; }
+        th { background: var(--maroon); color: var(--gold); padding: 12px; position: sticky; top: 0; }
         td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
-        .btn-del { background: #c62828; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .stats-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; background: #f9f9f9; padding: 10px 15px; border-radius: 10px; }
-        .stats { font-weight: bold; color: var(--maroon); }
+        .stats-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="admin-card">
     <div class="header">
-        <h2>إدارة قائمة الطلاب المعتمدة (ZBID) 🔒</h2>
-        <p>تتحكم هذه القائمة فيمن يمكنه دخول اختبارات القدرات</p>
+        <h2>لوحة التحكم الجماعي بالطلاب (ZBID) 🔒</h2>
+        <p>يمكنك الرفع الجماعي أو مسح القائمة بالكامل من هنا</p>
     </div>
 
-    <div class="stats-container">
-        <div class="stats" id="studentCount">عدد الطلاب المسجلين: جاري التحميل...</div>
-        <!-- زر التحديث مضاف هنا -->
-        <button class="refresh-btn" onclick="fetchStudents()">تحديث القائمة 🔄</button>
+    <div class="bulk-section">
+        <label><strong>الرفع الجماعي (الاسم ، الإيميل):</strong></label>
+        <p style="font-size: 0.8rem; color: #666;">ضع كل طالب في سطر (مثال: محمد أحمد, s12345@rb.moe.gov.sa)</p>
+        <textarea id="bulkInput" placeholder="أحمد علي, s1234567@rb.moe.gov.sa&#10;خالد محمد, s7654321@rb.moe.gov.sa"></textarea>
+        <div class="controls">
+            <button class="btn btn-upload" onclick="bulkAdd()">بدء الرفع الجماعي 🚀</button>
+            <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف جميع الطلاب 🗑️</button>
+            <button class="btn btn-refresh" onclick="fetchStudents()">تحديث القائمة 🔄</button>
+        </div>
     </div>
 
-    <div class="input-group">
-        <input type="text" id="newName" placeholder="اسم الطالب الثلاثي">
-        <input type="email" id="newEmail" placeholder="البريد الوزاري (sxxxxxxx@rb.moe.gov.sa)">
-        <button class="btn-add" onclick="addStudent()">إضافة طالب جديد +</button>
+    <div class="stats-bar">
+        <div id="studentCount">جاري التحميل...</div>
     </div>
 
     <table id="studentsTable">
@@ -64,9 +57,7 @@
                 <th>الإجراء</th>
             </tr>
         </thead>
-        <tbody>
-            <!-- قائمة الطلاب تظهر هنا -->
-        </tbody>
+        <tbody></tbody>
     </table>
 </div>
 
@@ -82,69 +73,74 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let unsubscribe = null; // لتجنب تكرار المستمعين عند الضغط على تحديث
-
+    // 1. جلب الطلاب
     function fetchStudents() {
         const tbody = document.querySelector("#studentsTable tbody");
-        const countDiv = document.getElementById("studentCount");
-        
-        // إيقاف المستمع القديم إذا وجد قبل بدء تحديث جديد
-        if (unsubscribe) unsubscribe();
-
-        tbody.innerHTML = "<tr><td colspan='3'>جاري تحديث البيانات...</td></tr>";
-
-        unsubscribe = db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
+        db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
+            document.getElementById("studentCount").innerText = `إجمالي الطلاب: ${snapshot.size}`;
             tbody.innerHTML = "";
-            countDiv.innerText = `عدد الطلاب المسجلين: ${snapshot.size}`;
-            
-            if (snapshot.empty) {
-                tbody.innerHTML = "<tr><td colspan='3'>لا يوجد طلاب مسجلون حالياً.</td></tr>";
-                return;
-            }
-
             snapshot.forEach((doc) => {
-                const data = doc.data();
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${data.name}</td>
-                        <td>${doc.id}</td>
-                        <td><button class="btn-del" onclick="deleteStudent('${doc.id}')">حذف 🗑️</button></td>
-                    </tr>
-                `;
+                tbody.innerHTML += `<tr>
+                    <td>${doc.data().name}</td>
+                    <td>${doc.id}</td>
+                    <td><button onclick="deleteSingle('${doc.id}')" style="color:red; cursor:pointer; background:none; border:none;">حذف</button></td>
+                </tr>`;
             });
-        }, (error) => {
-            console.error("خطأ في جلب البيانات:", error);
-            tbody.innerHTML = "<tr><td colspan='3'>حدث خطأ أثناء تحميل البيانات.</td></tr>";
         });
     }
 
-    async function addStudent() {
-        const name = document.getElementById("newName").value.trim();
-        const email = document.getElementById("newEmail").value.trim().toLowerCase();
+    // 2. الرفع الجماعي (ذكي جداً)
+    async function bulkAdd() {
+        const input = document.getElementById("bulkInput").value.trim();
+        if(!input) return alert("يرجى لصق البيانات أولاً");
 
-        if(!name || !email) return alert("يرجى إكمال البيانات");
-        if(!email.includes('@')) return alert("الإيميل غير صحيح");
+        const lines = input.split('\n');
+        let count = 0;
+        const batch = db.batch(); // استخدام الـ Batch للسرعة
 
-        try {
-            await db.collection("allowed_students").doc(email).set({
-                name: name,
-                added_at: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            document.getElementById("newName").value = "";
-            document.getElementById("newEmail").value = "";
-            alert("تمت إضافة الطالب بنجاح");
-        } catch (e) {
-            alert("خطأ في الإضافة");
+        for(let line of lines) {
+            // تقسيم السطر بناءً على الفاصلة أو المسافة الطويلة
+            let parts = line.includes(',') ? line.split(',') : line.split('\t');
+            if(parts.length >= 2) {
+                const name = parts[0].trim();
+                const email = parts[1].trim().toLowerCase();
+                
+                if(email.includes('@')) {
+                    const ref = db.collection("allowed_students").doc(email);
+                    batch.set(ref, { name: name, added_at: firebase.firestore.FieldValue.serverTimestamp() });
+                    count++;
+                }
+            }
+        }
+
+        if(count > 0) {
+            await batch.commit();
+            alert(`تم رفع ${count} طالب بنجاح!`);
+            document.getElementById("bulkInput").value = "";
+        } else {
+            alert("تنسيق البيانات غير صحيح. تأكد من وجود اسم ثم إيميل مفصولين بفاصلة.");
         }
     }
 
-    async function deleteStudent(email) {
-        if(confirm(`هل أنت متأكد من حذف الطالب صاحب الإيميل: ${email}؟`)) {
+    // 3. حذف الكل (تصفير القائمة)
+    async function deleteAllStudents() {
+        if(!confirm("⚠️ تحذير: سيتم حذف جميع الطلاب من القائمة المعتمدة تماماً. هل أنت متأكد؟")) return;
+
+        const snapshot = await db.collection("allowed_students").get();
+        const batch = db.batch();
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        
+        await batch.commit();
+        alert("تم مسح القائمة بالكامل.");
+    }
+
+    // 4. حذف فردي
+    async function deleteSingle(email) {
+        if(confirm(`حذف ${email}؟`)) {
             await db.collection("allowed_students").doc(email).delete();
         }
     }
 
-    // تشغيل الجلب لأول مرة عند تحميل الصفحة
     fetchStudents();
 </script>
 
