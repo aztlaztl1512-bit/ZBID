@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة التحكم الذكية - أ/ عبدالعزيز الفيفي</title>
+    <title>لوحة التحكم الشاملة - أ/ عبدالعزيز الفيفي</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
@@ -11,7 +11,7 @@
         .admin-card { background: white; max-width: 1000px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
         .header { text-align: center; border-bottom: 2px solid var(--gold); margin-bottom: 20px; }
         .bulk-section { background: #f4f4f4; padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px dashed var(--maroon); }
-        textarea { width: 100%; height: 180px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
+        textarea { width: 100%; height: 200px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
         .controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
         .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-upload { background: var(--maroon); color: var(--gold); }
@@ -19,22 +19,22 @@
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th { background: var(--maroon); color: var(--gold); padding: 12px; position: sticky; top: 0; }
         td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
-        .stats-bar { margin-bottom: 15px; font-weight: bold; color: var(--maroon); }
+        .stats-bar { margin-bottom: 15px; font-weight: bold; color: var(--maroon); font-size: 1.2rem; }
     </style>
 </head>
 <body>
 
 <div class="admin-card">
     <div class="header">
-        <h2>معالج قائمة الطلاب الذكي (ZBID) 🔒</h2>
-        <p>انسخ قائمتك كما هي (اسم ثم إيميل في سطرين) وسيقوم النظام بترتيبها</p>
+        <h2>المعالج النهائي للقوائم (ZBID) 🔒</h2>
+        <p>لا تقلق بشأن الترتيب (إيميل ثم اسم أو العكس)، الكود سيعالجها جميعاً</p>
     </div>
 
     <div class="bulk-section">
-        <label><strong>لصق القائمة المباشر:</strong></label>
-        <textarea id="bulkInput" placeholder="الصق القائمة هنا بنفس تنسيقك:&#10;حسن علي الزهراني&#10;s4514609@rb.moe.gov.sa"></textarea>
+        <label><strong>لصق القائمة هنا:</strong></label>
+        <textarea id="bulkInput" placeholder="الصق هنا.. لا يهم إذا بدأ السطر بالاسم أو الإيميل"></textarea>
         <div class="controls">
-            <button class="btn btn-upload" onclick="smartBulkAdd()">بدء المعالجة والرفع 🚀</button>
+            <button class="btn btn-upload" onclick="superSmartBulkAdd()">بدء المعالجة والرفع 🚀</button>
             <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف الكل 🗑️</button>
         </div>
     </div>
@@ -76,7 +76,7 @@
         });
     }
 
-    async function smartBulkAdd() {
+    async function superSmartBulkAdd() {
         const input = document.getElementById("bulkInput").value.trim();
         if(!input) return alert("يرجى لصق البيانات");
 
@@ -84,38 +84,48 @@
         const batch = db.batch();
         let count = 0;
 
-        // معالج السطرين: يأخذ كل سطرين معاً كطالب واحد
         for(let i = 0; i < lines.length; i++) {
-            let currentLine = lines[i];
-            let nextLine = lines[i+1];
+            let line1 = lines[i];
+            let line2 = lines[i+1];
 
-            // إذا كان السطر الحالي اسماً (لا يحتوي @) والسطر التالي إيميلاً
-            if(!currentLine.includes('@') && nextLine && nextLine.includes('@')) {
-                const name = currentLine;
-                const email = nextLine.toLowerCase();
+            if(!line2) break; // نهاية القائمة
+
+            let name = "", email = "";
+
+            // حالة 1: السطر الأول اسم والثاني إيميل
+            if(!line1.includes('@') && line2.includes('@')) {
+                name = line1; email = line2.toLowerCase();
+                i++; // قفزة مزدوجة
+            } 
+            // حالة 2: السطر الأول إيميل والثاني اسم
+            else if(line1.includes('@') && !line2.includes('@')) {
+                email = line1.toLowerCase(); name = line2;
+                i++; // قفزة مزدوجة
+            }
+
+            if(name && email) {
                 const ref = db.collection("allowed_students").doc(email);
                 batch.set(ref, { name: name, added_at: firebase.firestore.FieldValue.serverTimestamp() });
                 count++;
-                i++; // تخطي السطر التالي لأنه عولج كإيميل
             }
         }
 
         if(count > 0) {
             await batch.commit();
-            alert(`نجحت العملية! تم التعرف على ${count} طالب ورفعهم بنجاح.`);
+            alert(`تم رفع ${count} طالب بنجاح!`);
             document.getElementById("bulkInput").value = "";
         } else {
-            alert("لم يتم التعرف على بيانات صحيحة. تأكد أن الاسم في سطر والإيميل في السطر الذي تحته مباشرة.");
+            alert("تنسيق غير معروف. تأكد من وجود الاسم والإيميل في سطرين متتاليين.");
         }
     }
 
     async function deleteAllStudents() {
-        if(!confirm("هل أنت متأكد من مسح جميع الـ 160 طالباً؟")) return;
+        if(!confirm("مسح القائمة بالكامل؟")) return;
         const snapshot = await db.collection("allowed_students").get();
         const batch = db.batch();
         snapshot.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        alert("تم تصفير القائمة.");
+        alert("تم التصفير.");
     }
 
     async function deleteSingle(email) {
