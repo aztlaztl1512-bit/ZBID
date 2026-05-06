@@ -13,11 +13,27 @@
         .input-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; min-width: 200px; }
         .btn-add { background: #2e7d32; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        
+        /* تنسيق زر التحديث الجديد */
+        .refresh-btn { 
+            background: var(--gold); 
+            color: var(--maroon); 
+            border: none; 
+            padding: 8px 15px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            margin-right: 15px;
+            font-size: 0.9rem;
+        }
+        .refresh-btn:hover { opacity: 0.9; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th { background: var(--maroon); color: var(--gold); padding: 12px; }
         td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
         .btn-del { background: #c62828; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-        .stats { margin-bottom: 15px; font-weight: bold; color: var(--maroon); }
+        .stats-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; background: #f9f9f9; padding: 10px 15px; border-radius: 10px; }
+        .stats { font-weight: bold; color: var(--maroon); }
     </style>
 </head>
 <body>
@@ -28,7 +44,11 @@
         <p>تتحكم هذه القائمة فيمن يمكنه دخول اختبارات القدرات</p>
     </div>
 
-    <div class="stats" id="studentCount">عدد الطلاب المسجلين: جاري التحميل...</div>
+    <div class="stats-container">
+        <div class="stats" id="studentCount">عدد الطلاب المسجلين: جاري التحميل...</div>
+        <!-- زر التحديث مضاف هنا -->
+        <button class="refresh-btn" onclick="fetchStudents()">تحديث القائمة 🔄</button>
+    </div>
 
     <div class="input-group">
         <input type="text" id="newName" placeholder="اسم الطالب الثلاثي">
@@ -62,15 +82,26 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // جلب القائمة وتحديثها
+    let unsubscribe = null; // لتجنب تكرار المستمعين عند الضغط على تحديث
+
     function fetchStudents() {
         const tbody = document.querySelector("#studentsTable tbody");
         const countDiv = document.getElementById("studentCount");
         
-        db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
+        // إيقاف المستمع القديم إذا وجد قبل بدء تحديث جديد
+        if (unsubscribe) unsubscribe();
+
+        tbody.innerHTML = "<tr><td colspan='3'>جاري تحديث البيانات...</td></tr>";
+
+        unsubscribe = db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
             tbody.innerHTML = "";
             countDiv.innerText = `عدد الطلاب المسجلين: ${snapshot.size}`;
             
+            if (snapshot.empty) {
+                tbody.innerHTML = "<tr><td colspan='3'>لا يوجد طلاب مسجلون حالياً.</td></tr>";
+                return;
+            }
+
             snapshot.forEach((doc) => {
                 const data = doc.data();
                 tbody.innerHTML += `
@@ -81,10 +112,12 @@
                     </tr>
                 `;
             });
+        }, (error) => {
+            console.error("خطأ في جلب البيانات:", error);
+            tbody.innerHTML = "<tr><td colspan='3'>حدث خطأ أثناء تحميل البيانات.</td></tr>";
         });
     }
 
-    // إضافة طالب جديد
     async function addStudent() {
         const name = document.getElementById("newName").value.trim();
         const email = document.getElementById("newEmail").value.trim().toLowerCase();
@@ -105,13 +138,13 @@
         }
     }
 
-    // حذف طالب
     async function deleteStudent(email) {
         if(confirm(`هل أنت متأكد من حذف الطالب صاحب الإيميل: ${email}؟`)) {
             await db.collection("allowed_students").doc(email).delete();
         }
     }
 
+    // تشغيل الجلب لأول مرة عند تحميل الصفحة
     fetchStudents();
 </script>
 
