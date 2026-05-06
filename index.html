@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة الوصول المتقدمة - أ/ عبدالعزيز الفيفي</title>
+    <title>لوحة التحكم الذكية - أ/ عبدالعزيز الفيفي</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
@@ -10,44 +10,36 @@
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; }
         .admin-card { background: white; max-width: 1000px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
         .header { text-align: center; border-bottom: 2px solid var(--gold); margin-bottom: 20px; }
-        
         .bulk-section { background: #f4f4f4; padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px dashed var(--maroon); }
-        textarea { width: 100%; height: 120px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: monospace; resize: none; box-sizing: border-box; }
-        
+        textarea { width: 100%; height: 180px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
         .controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
         .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-upload { background: var(--maroon); color: var(--gold); }
         .btn-delete-all { background: var(--danger); color: white; }
-        .btn-refresh { background: #eee; color: #333; }
-        
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th { background: var(--maroon); color: var(--gold); padding: 12px; position: sticky; top: 0; }
         td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
-        .stats-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; }
+        .stats-bar { margin-bottom: 15px; font-weight: bold; color: var(--maroon); }
     </style>
 </head>
 <body>
 
 <div class="admin-card">
     <div class="header">
-        <h2>لوحة التحكم الجماعي بالطلاب (ZBID) 🔒</h2>
-        <p>يمكنك الرفع الجماعي أو مسح القائمة بالكامل من هنا</p>
+        <h2>معالج قائمة الطلاب الذكي (ZBID) 🔒</h2>
+        <p>انسخ قائمتك كما هي (اسم ثم إيميل في سطرين) وسيقوم النظام بترتيبها</p>
     </div>
 
     <div class="bulk-section">
-        <label><strong>الرفع الجماعي (الاسم ، الإيميل):</strong></label>
-        <p style="font-size: 0.8rem; color: #666;">ضع كل طالب في سطر (مثال: محمد أحمد, s12345@rb.moe.gov.sa)</p>
-        <textarea id="bulkInput" placeholder="أحمد علي, s1234567@rb.moe.gov.sa&#10;خالد محمد, s7654321@rb.moe.gov.sa"></textarea>
+        <label><strong>لصق القائمة المباشر:</strong></label>
+        <textarea id="bulkInput" placeholder="الصق القائمة هنا بنفس تنسيقك:&#10;حسن علي الزهراني&#10;s4514609@rb.moe.gov.sa"></textarea>
         <div class="controls">
-            <button class="btn btn-upload" onclick="bulkAdd()">بدء الرفع الجماعي 🚀</button>
-            <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف جميع الطلاب 🗑️</button>
-            <button class="btn btn-refresh" onclick="fetchStudents()">تحديث القائمة 🔄</button>
+            <button class="btn btn-upload" onclick="smartBulkAdd()">بدء المعالجة والرفع 🚀</button>
+            <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف الكل 🗑️</button>
         </div>
     </div>
 
-    <div class="stats-bar">
-        <div id="studentCount">جاري التحميل...</div>
-    </div>
+    <div class="stats-bar" id="studentCount">جاري التحميل...</div>
 
     <table id="studentsTable">
         <thead>
@@ -73,72 +65,61 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // 1. جلب الطلاب
     function fetchStudents() {
         const tbody = document.querySelector("#studentsTable tbody");
         db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
-            document.getElementById("studentCount").innerText = `إجمالي الطلاب: ${snapshot.size}`;
+            document.getElementById("studentCount").innerText = `عدد الطلاب الحالي: ${snapshot.size}`;
             tbody.innerHTML = "";
             snapshot.forEach((doc) => {
-                tbody.innerHTML += `<tr>
-                    <td>${doc.data().name}</td>
-                    <td>${doc.id}</td>
-                    <td><button onclick="deleteSingle('${doc.id}')" style="color:red; cursor:pointer; background:none; border:none;">حذف</button></td>
-                </tr>`;
+                tbody.innerHTML += `<tr><td>${doc.data().name}</td><td>${doc.id}</td><td><button onclick="deleteSingle('${doc.id}')" style="color:red; cursor:pointer; background:none; border:none;">حذف</button></td></tr>`;
             });
         });
     }
 
-    // 2. الرفع الجماعي (ذكي جداً)
-    async function bulkAdd() {
+    async function smartBulkAdd() {
         const input = document.getElementById("bulkInput").value.trim();
-        if(!input) return alert("يرجى لصق البيانات أولاً");
+        if(!input) return alert("يرجى لصق البيانات");
 
-        const lines = input.split('\n');
+        const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
+        const batch = db.batch();
         let count = 0;
-        const batch = db.batch(); // استخدام الـ Batch للسرعة
 
-        for(let line of lines) {
-            // تقسيم السطر بناءً على الفاصلة أو المسافة الطويلة
-            let parts = line.includes(',') ? line.split(',') : line.split('\t');
-            if(parts.length >= 2) {
-                const name = parts[0].trim();
-                const email = parts[1].trim().toLowerCase();
-                
-                if(email.includes('@')) {
-                    const ref = db.collection("allowed_students").doc(email);
-                    batch.set(ref, { name: name, added_at: firebase.firestore.FieldValue.serverTimestamp() });
-                    count++;
-                }
+        // معالج السطرين: يأخذ كل سطرين معاً كطالب واحد
+        for(let i = 0; i < lines.length; i++) {
+            let currentLine = lines[i];
+            let nextLine = lines[i+1];
+
+            // إذا كان السطر الحالي اسماً (لا يحتوي @) والسطر التالي إيميلاً
+            if(!currentLine.includes('@') && nextLine && nextLine.includes('@')) {
+                const name = currentLine;
+                const email = nextLine.toLowerCase();
+                const ref = db.collection("allowed_students").doc(email);
+                batch.set(ref, { name: name, added_at: firebase.firestore.FieldValue.serverTimestamp() });
+                count++;
+                i++; // تخطي السطر التالي لأنه عولج كإيميل
             }
         }
 
         if(count > 0) {
             await batch.commit();
-            alert(`تم رفع ${count} طالب بنجاح!`);
+            alert(`نجحت العملية! تم التعرف على ${count} طالب ورفعهم بنجاح.`);
             document.getElementById("bulkInput").value = "";
         } else {
-            alert("تنسيق البيانات غير صحيح. تأكد من وجود اسم ثم إيميل مفصولين بفاصلة.");
+            alert("لم يتم التعرف على بيانات صحيحة. تأكد أن الاسم في سطر والإيميل في السطر الذي تحته مباشرة.");
         }
     }
 
-    // 3. حذف الكل (تصفير القائمة)
     async function deleteAllStudents() {
-        if(!confirm("⚠️ تحذير: سيتم حذف جميع الطلاب من القائمة المعتمدة تماماً. هل أنت متأكد؟")) return;
-
+        if(!confirm("هل أنت متأكد من مسح جميع الـ 160 طالباً؟")) return;
         const snapshot = await db.collection("allowed_students").get();
         const batch = db.batch();
         snapshot.forEach(doc => batch.delete(doc.ref));
-        
         await batch.commit();
-        alert("تم مسح القائمة بالكامل.");
+        alert("تم تصفير القائمة.");
     }
 
-    // 4. حذف فردي
     async function deleteSingle(email) {
-        if(confirm(`حذف ${email}؟`)) {
-            await db.collection("allowed_students").doc(email).delete();
-        }
+        if(confirm(`حذف ${email}؟`)) await db.collection("allowed_students").doc(email).delete();
     }
 
     fetchStudents();
