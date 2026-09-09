@@ -17,7 +17,6 @@
         .btn-upload { background: var(--maroon); color: var(--gold); }
         .btn-delete-all { background: var(--danger); color: white; }
         
-        /* تنسيقات الجداول ومربع البحث */
         .pending-section { background: #fff8e1; border: 2px solid #ffc107; padding: 15px; border-radius: 10px; margin-bottom: 25px; display: none; }
         .pending-section h3 { color: #d32f2f; margin-top: 0; }
         
@@ -29,8 +28,6 @@
         .btn-reject { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         
         .stats-bar { display: flex; justify-content: space-between; background: #e9ecef; padding: 15px; border-radius: 8px; font-weight: bold; color: var(--maroon); font-size: 1.1rem; margin-bottom: 15px; }
-
-        /* تنسيقات قسم البحث */
         .search-container { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
         .search-container h3 { margin: 0; }
         .search-box { padding: 10px 15px; width: 100%; max-width: 350px; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; outline: none; transition: 0.3s; }
@@ -45,7 +42,7 @@
         <p>إدارة الطلاب المعتمدين ومراجعة طلبات التسجيل الجديدة</p>
     </div>
 
-    <!-- قسم الطلبات المعلقة -->
+    <!-- قسم الطلبات المعلقة (قائمة الانتظار المستقلة) -->
     <div class="pending-section" id="pendingSection">
         <h3>🔔 طلبات تسجيل جديدة بانتظار المراجعة</h3>
         <table id="pendingTable">
@@ -62,11 +59,11 @@
 
     <!-- قسم الرفع الجماعي -->
     <div class="bulk-section">
-        <label><strong>لصق القائمة هنا (سيتم اعتمادهم مباشرة):</strong></label>
+        <label><strong>لصق القائمة هنا (سيتم اعتمادهم مباشرة للمعتمدين):</strong></label>
         <textarea id="bulkInput" placeholder="الصق هنا.. لا يهم إذا بدأ السطر بالاسم أو الإيميل"></textarea>
         <div class="controls">
             <button class="btn btn-upload" onclick="superSmartBulkAdd()">بدء المعالجة والرفع 🚀</button>
-            <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف الكل 🗑️</button>
+            <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف الكل (المعتمدين) 🗑️</button>
         </div>
     </div>
 
@@ -78,7 +75,7 @@
 
     <!-- رأس جدول المعتمدين مع مربع البحث الذكي -->
     <div class="search-container">
-        <h3>🎓 قائمة الطلاب المعتمدين</h3>
+        <h3>🎓 قائمة الطلاب المعتمدين (المصرح لهم بالاختبار)</h3>
         <input type="text" id="searchInput" class="search-box" onkeyup="searchStudents()" placeholder="🔍 ابحث عن اسم الطالب أو إيميله...">
     </div>
 
@@ -111,85 +108,78 @@
         const pendingTbody = document.querySelector("#pendingTable tbody");
         const pendingSection = document.getElementById("pendingSection");
 
+        // 1. مراقبة جدول الطلاب المعتمدين (الذي يقرأ منه الاختبار)
         db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
-            let approvedCount = 0;
-            let pendingCount = 0;
-            
+            let approvedCount = snapshot.size;
             approvedTbody.innerHTML = "";
-            pendingTbody.innerHTML = "";
+            document.getElementById("approvedCount").innerText = `الطلاب المعتمدين: ${approvedCount}`;
 
             snapshot.forEach((doc) => {
                 const data = doc.data();
                 const email = doc.id;
-                
-                if (data.status === 'pending') {
-                    pendingCount++;
-                    pendingTbody.innerHTML += `
-                        <tr>
-                            <td>${data.name}</td>
-                            <td>${email}</td>
-                            <td>
-                                <button class="btn-approve" onclick="approveStudent('${email}')">✅ قبول</button>
-                                <button class="btn-reject" onclick="deleteSingle('${email}')">❌ رفض</button>
-                            </td>
-                        </tr>`;
-                } else {
-                    approvedCount++;
-                    approvedTbody.innerHTML += `
-                        <tr>
-                            <td>${data.name}</td>
-                            <td>${email}</td>
-                            <td><button class="btn-reject" onclick="deleteSingle('${email}')">🗑️ حذف</button></td>
-                        </tr>`;
-                }
+                approvedTbody.innerHTML += `
+                    <tr>
+                        <td>${data.name}</td>
+                        <td>${email}</td>
+                        <td><button class="btn-reject" onclick="deleteAllowed('${email}')">🗑️ حذف</button></td>
+                    </tr>`;
             });
+            searchStudents();
+        });
 
-            document.getElementById("approvedCount").innerText = `الطلاب المعتمدين: ${approvedCount}`;
+        // 2. مراقبة جدول الطلبات المعلقة (قائمة الانتظار)
+        db.collection("pending_students").orderBy("name").onSnapshot((snapshot) => {
+            let pendingCount = snapshot.size;
+            pendingTbody.innerHTML = "";
             document.getElementById("pendingCountBadge").innerText = `الطلبات المعلقة: ${pendingCount}`;
             pendingSection.style.display = pendingCount > 0 ? "block" : "none";
 
-            // إعادة تطبيق البحث في حال تم إضافة أو قبول طالب أثناء الكتابة في مربع البحث
-            searchStudents();
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const email = doc.id;
+                pendingTbody.innerHTML += `
+                    <tr>
+                        <td>${data.name}</td>
+                        <td>${email}</td>
+                        <td>
+                            <button class="btn-approve" onclick="approveStudent('${email}', '${data.name}')">✅ قبول</button>
+                            <button class="btn-reject" onclick="deletePending('${email}')">❌ رفض</button>
+                        </td>
+                    </tr>`;
+            });
         });
     }
 
-    // دالة البحث الذكي واللحظي
-    function searchStudents() {
-        let input = document.getElementById("searchInput");
-        let filter = input.value.toUpperCase();
-        let table = document.getElementById("studentsTable");
-        let tr = table.getElementsByTagName("tr");
-
-        for (let i = 1; i < tr.length; i++) { // نبدأ من 1 لتجاهل العناوين
-            let tdName = tr[i].getElementsByTagName("td")[0];
-            let tdEmail = tr[i].getElementsByTagName("td")[1];
-            
-            if (tdName || tdEmail) {
-                let txtValueName = tdName.textContent || tdName.innerText;
-                let txtValueEmail = tdEmail.textContent || tdEmail.innerText;
-                
-                // البحث يتطابق مع الاسم أو الإيميل
-                if (txtValueName.toUpperCase().indexOf(filter) > -1 || txtValueEmail.toUpperCase().indexOf(filter) > -1) {
-                    tr[i].style.display = "";
-                } else {
-                    tr[i].style.display = "none"; // إخفاء الصف إذا لم يتطابق
-                }
-            }       
-        }
-    }
-
-    // دالة الموافقة على الطالب
-    async function approveStudent(email) {
+    // دالة قبول الطالب (تنقله من الانتظار إلى مجموعة المعتمدين للاختبار)
+    async function approveStudent(email, name) {
         try {
-            await db.collection("allowed_students").doc(email).update({
-                status: "approved"
+            // أضافته لمجموعة المعتمدين التي يقرأ منها الاختبار
+            await db.collection("allowed_students").doc(email).set({
+                name: name,
+                added_at: firebase.firestore.FieldValue.serverTimestamp()
             });
+            // حذفه من قائمة الانتظار
+            await db.collection("pending_students").doc(email).delete();
         } catch (error) {
             alert("حدث خطأ أثناء الموافقة.");
         }
     }
 
-    // دوال الرفع والحذف الأساسية
+    // حذف طالب من المعلقين (رفض)
+    async function deletePending(email) {
+        if(confirm(`رفض وحذف ${email} من قائمة الانتظار؟`)) {
+            await db.collection("pending_students").doc(email).delete();
+        }
+    }
+
+    // حذف طالب من المعتمدين
+    async function deleteAllowed(email) {
+        if(confirm(`حذف ${email} من الطلاب المعتمدين؟`)) {
+            await db.collection("allowed_students").doc(email).delete();
+        }
+    }
+
+    // دالة الرفع الجماعي (تضيف مباشرة للمعتمدين)
     async function superSmartBulkAdd() {
         const input = document.getElementById("bulkInput").value.trim();
         if(!input) return alert("يرجى لصق البيانات");
@@ -216,14 +206,14 @@
 
             if(name && email) {
                 const ref = db.collection("allowed_students").doc(email);
-                batch.set(ref, { name: name, status: "approved", added_at: firebase.firestore.FieldValue.serverTimestamp() });
+                batch.set(ref, { name: name, added_at: firebase.firestore.FieldValue.serverTimestamp() });
                 count++;
             }
         }
 
         if(count > 0) {
             await batch.commit();
-            alert(`تم رفع واعتماد ${count} طالب بنجاح!`);
+            alert(`تم رفع واعتماد ${count} طالب مباشرة بنجاح!`);
             document.getElementById("bulkInput").value = "";
         } else {
             alert("تنسيق غير معروف. تأكد من وجود الاسم والإيميل في سطرين متتاليين.");
@@ -231,17 +221,34 @@
     }
 
     async function deleteAllStudents() {
-        if(!confirm("تحذير: هل أنت متأكد من مسح جميع الطلاب المعتمدين والمعلقين؟")) return;
+        if(!confirm("تحذير: هل أنت متأكد من مسح جميع الطلاب المعتمدين؟")) return;
         const snapshot = await db.collection("allowed_students").get();
         const batch = db.batch();
         snapshot.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        alert("تم التصفير بنجاح.");
+        alert("تمت تصفية قائمة المعتمدين.");
     }
 
-    async function deleteSingle(email) {
-        if(confirm(`هل أنت متأكد من حذف ${email}؟`)) {
-            await db.collection("allowed_students").doc(email).delete();
+    function searchStudents() {
+        let input = document.getElementById("searchInput");
+        let filter = input.value.toUpperCase();
+        let table = document.getElementById("studentsTable");
+        let tr = table.getElementsByTagName("tr");
+
+        for (let i = 1; i < tr.length; i++) {
+            let tdName = tr[i].getElementsByTagName("td")[0];
+            let tdEmail = tr[i].getElementsByTagName("td")[1];
+            
+            if (tdName || tdEmail) {
+                let txtValueName = tdName.textContent || tdName.innerText;
+                let txtValueEmail = tdEmail.textContent || tdEmail.innerText;
+                
+                if (txtValueName.toUpperCase().indexOf(filter) > -1 || txtValueEmail.toUpperCase().indexOf(filter) > -1) {
+                    tr[i].style.display = "";
+                } else {
+                    tr[i].style.display = "none";
+                }
+            }       
         }
     }
 
