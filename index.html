@@ -6,32 +6,57 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
-        :root { --maroon: #800000; --gold: #d4af37; --bg: #fdfaf1; --danger: #c62828; }
+        :root { --maroon: #800000; --gold: #d4af37; --bg: #fdfaf1; --danger: #c62828; --success: #28a745; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; }
         .admin-card { background: white; max-width: 1000px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
-        .header { text-align: center; border-bottom: 2px solid var(--gold); margin-bottom: 20px; }
+        .header { text-align: center; border-bottom: 2px solid var(--gold); margin-bottom: 20px; padding-bottom: 10px; }
         .bulk-section { background: #f4f4f4; padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px dashed var(--maroon); }
-        textarea { width: 100%; height: 200px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
+        textarea { width: 100%; height: 150px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
         .controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-        .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-upload { background: var(--maroon); color: var(--gold); }
         .btn-delete-all { background: var(--danger); color: white; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: var(--maroon); color: var(--gold); padding: 12px; position: sticky; top: 0; }
+        
+        /* تنسيقات الجداول الجديدة */
+        .pending-section { background: #fff8e1; border: 2px solid #ffc107; padding: 15px; border-radius: 10px; margin-bottom: 25px; display: none; }
+        .pending-section h3 { color: #d32f2f; margin-top: 0; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th { background: var(--maroon); color: var(--gold); padding: 12px; }
         td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
-        .stats-bar { margin-bottom: 15px; font-weight: bold; color: var(--maroon); font-size: 1.2rem; }
+        
+        .btn-approve { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-reject { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        
+        .stats-bar { display: flex; justify-content: space-between; background: #e9ecef; padding: 15px; border-radius: 8px; font-weight: bold; color: var(--maroon); font-size: 1.1rem; margin-bottom: 15px; }
     </style>
 </head>
 <body>
 
 <div class="admin-card">
     <div class="header">
-        <h2>المعالج النهائي للقوائم (ZBID) 🔒</h2>
-        <p>لا تقلق بشأن الترتيب (إيميل ثم اسم أو العكس)، الكود سيعالجها جميعاً</p>
+        <h2>لوحة التحكم الشاملة (ZBID) 🔒</h2>
+        <p>إدارة الطلاب المعتمدين ومراجعة طلبات التسجيل الجديدة</p>
     </div>
 
+    <!-- قسم الطلبات المعلقة (يظهر فقط إذا كان هناك طلبات) -->
+    <div class="pending-section" id="pendingSection">
+        <h3>🔔 طلبات تسجيل جديدة بانتظار المراجعة</h3>
+        <table id="pendingTable">
+            <thead>
+                <tr>
+                    <th>الاسم</th>
+                    <th>البريد الإلكتروني</th>
+                    <th>الإجراء</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- قسم الرفع الجماعي (كالسابق) -->
     <div class="bulk-section">
-        <label><strong>لصق القائمة هنا:</strong></label>
+        <label><strong>لصق القائمة هنا (سيتم اعتمادهم مباشرة):</strong></label>
         <textarea id="bulkInput" placeholder="الصق هنا.. لا يهم إذا بدأ السطر بالاسم أو الإيميل"></textarea>
         <div class="controls">
             <button class="btn btn-upload" onclick="superSmartBulkAdd()">بدء المعالجة والرفع 🚀</button>
@@ -39,8 +64,14 @@
         </div>
     </div>
 
-    <div class="stats-bar" id="studentCount">جاري التحميل...</div>
+    <!-- شريط الإحصائيات -->
+    <div class="stats-bar">
+        <span id="approvedCount">الطلاب المعتمدين: 0</span>
+        <span id="pendingCountBadge" style="color: #d32f2f;">الطلبات المعلقة: 0</span>
+    </div>
 
+    <!-- جدول الطلاب المعتمدين -->
+    <h3>🎓 قائمة الطلاب المعتمدين</h3>
     <table id="studentsTable">
         <thead>
             <tr>
@@ -66,16 +97,63 @@
     const db = firebase.firestore();
 
     function fetchStudents() {
-        const tbody = document.querySelector("#studentsTable tbody");
+        const approvedTbody = document.querySelector("#studentsTable tbody");
+        const pendingTbody = document.querySelector("#pendingTable tbody");
+        const pendingSection = document.getElementById("pendingSection");
+
         db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
-            document.getElementById("studentCount").innerText = `عدد الطلاب الحالي: ${snapshot.size}`;
-            tbody.innerHTML = "";
+            let approvedCount = 0;
+            let pendingCount = 0;
+            
+            approvedTbody.innerHTML = "";
+            pendingTbody.innerHTML = "";
+
             snapshot.forEach((doc) => {
-                tbody.innerHTML += `<tr><td>${doc.data().name}</td><td>${doc.id}</td><td><button onclick="deleteSingle('${doc.id}')" style="color:red; cursor:pointer; background:none; border:none;">حذف</button></td></tr>`;
+                const data = doc.data();
+                const email = doc.id;
+                
+                // فرز الطلاب: إذا كان معلق يذهب لجدول الطلبات، وإلا لجدول المعتمدين
+                if (data.status === 'pending') {
+                    pendingCount++;
+                    pendingTbody.innerHTML += `
+                        <tr>
+                            <td>${data.name}</td>
+                            <td>${email}</td>
+                            <td>
+                                <button class="btn-approve" onclick="approveStudent('${email}')">✅ قبول</button>
+                                <button class="btn-reject" onclick="deleteSingle('${email}')">❌ رفض</button>
+                            </td>
+                        </tr>`;
+                } else {
+                    approvedCount++;
+                    approvedTbody.innerHTML += `
+                        <tr>
+                            <td>${data.name}</td>
+                            <td>${email}</td>
+                            <td><button class="btn-reject" onclick="deleteSingle('${email}')">🗑️ حذف</button></td>
+                        </tr>`;
+                }
             });
+
+            // تحديث الإحصائيات وإظهار/إخفاء قسم الطلبات المعلقة
+            document.getElementById("approvedCount").innerText = `الطلاب المعتمدين: ${approvedCount}`;
+            document.getElementById("pendingCountBadge").innerText = `الطلبات المعلقة: ${pendingCount}`;
+            pendingSection.style.display = pendingCount > 0 ? "block" : "none";
         });
     }
 
+    // دالة الموافقة على الطالب
+    async function approveStudent(email) {
+        try {
+            await db.collection("allowed_students").doc(email).update({
+                status: "approved"
+            });
+        } catch (error) {
+            alert("حدث خطأ أثناء الموافقة.");
+        }
+    }
+
+    // دوال الرفع والحذف الأساسية
     async function superSmartBulkAdd() {
         const input = document.getElementById("bulkInput").value.trim();
         if(!input) return alert("يرجى لصق البيانات");
@@ -88,31 +166,29 @@
             let line1 = lines[i];
             let line2 = lines[i+1];
 
-            if(!line2) break; // نهاية القائمة
+            if(!line2) break;
 
             let name = "", email = "";
 
-            // حالة 1: السطر الأول اسم والثاني إيميل
             if(!line1.includes('@') && line2.includes('@')) {
                 name = line1; email = line2.toLowerCase();
-                i++; // قفزة مزدوجة
-            } 
-            // حالة 2: السطر الأول إيميل والثاني اسم
-            else if(line1.includes('@') && !line2.includes('@')) {
+                i++;
+            } else if(line1.includes('@') && !line2.includes('@')) {
                 email = line1.toLowerCase(); name = line2;
-                i++; // قفزة مزدوجة
+                i++;
             }
 
             if(name && email) {
                 const ref = db.collection("allowed_students").doc(email);
-                batch.set(ref, { name: name, added_at: firebase.firestore.FieldValue.serverTimestamp() });
+                // الطلاب المرفوعين يدوياً يتم اعتمادهم مباشرة
+                batch.set(ref, { name: name, status: "approved", added_at: firebase.firestore.FieldValue.serverTimestamp() });
                 count++;
             }
         }
 
         if(count > 0) {
             await batch.commit();
-            alert(`تم رفع ${count} طالب بنجاح!`);
+            alert(`تم رفع واعتماد ${count} طالب بنجاح!`);
             document.getElementById("bulkInput").value = "";
         } else {
             alert("تنسيق غير معروف. تأكد من وجود الاسم والإيميل في سطرين متتاليين.");
@@ -120,16 +196,18 @@
     }
 
     async function deleteAllStudents() {
-        if(!confirm("مسح القائمة بالكامل؟")) return;
+        if(!confirm("تحذير: هل أنت متأكد من مسح جميع الطلاب المعتمدين والمعلقين؟")) return;
         const snapshot = await db.collection("allowed_students").get();
         const batch = db.batch();
         snapshot.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        alert("تم التصفير.");
+        alert("تم التصفير بنجاح.");
     }
 
     async function deleteSingle(email) {
-        if(confirm(`حذف ${email}؟`)) await db.collection("allowed_students").doc(email).delete();
+        if(confirm(`هل أنت متأكد من حذف ${email}؟`)) {
+            await db.collection("allowed_students").doc(email).delete();
+        }
     }
 
     fetchStudents();
