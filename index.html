@@ -6,15 +6,16 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
-        :root { --maroon: #800000; --gold: #d4af37; --bg: #fdfaf1; --danger: #c62828; --success: #28a745; }
+        :root { --maroon: #800000; --gold: #d4af37; --bg: #fdfaf1; --danger: #c62828; --success: #28a745; --info: #17a2b8; --warning: #f57c00; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; }
-        .admin-card { background: white; max-width: 1000px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
+        .admin-card { background: white; max-width: 1050px; margin: auto; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); border-top: 8px solid var(--maroon); }
         .header { text-align: center; border-bottom: 2px solid var(--gold); margin-bottom: 20px; padding-bottom: 10px; }
         .bulk-section { background: #f4f4f4; padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px dashed var(--maroon); }
         textarea { width: 100%; height: 150px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
         .controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
         .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-upload { background: var(--maroon); color: var(--gold); }
+        .btn-copy { background: var(--info); color: white; }
         .btn-delete-all { background: var(--danger); color: white; }
         
         .pending-section { background: #fff8e1; border: 2px solid #ffc107; padding: 15px; border-radius: 10px; margin-bottom: 25px; display: none; }
@@ -22,11 +23,30 @@
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
         th { background: var(--maroon); color: var(--gold); padding: 12px; }
-        td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; }
+        td { border-bottom: 1px solid #eee; padding: 10px; text-align: center; vertical-align: middle; }
         
         .btn-approve { background: var(--success); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn-reject { background: var(--danger); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         
+        /* تنسيق القائمة المنسدلة للعمليات */
+        .action-select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #b0bec5;
+            background-color: #f8f9fa;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: var(--maroon);
+            cursor: pointer;
+            outline: none;
+            transition: 0.2s;
+        }
+        .action-select:hover {
+            border-color: var(--maroon);
+            background-color: #fff;
+        }
+
         .stats-bar { display: flex; justify-content: space-between; background: #e9ecef; padding: 15px; border-radius: 8px; font-weight: bold; color: var(--maroon); font-size: 1.1rem; margin-bottom: 15px; }
         .search-container { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 10px; }
         .search-container h3 { margin: 0; }
@@ -42,7 +62,7 @@
         <p>إدارة الطلاب المعتمدين ومراجعة طلبات التسجيل الجديدة</p>
     </div>
 
-    <!-- قسم الطلبات المعلقة (قائمة الانتظار المستقلة) -->
+    <!-- قسم الطلبات المعلقة -->
     <div class="pending-section" id="pendingSection">
         <h3>🔔 طلبات تسجيل جديدة بانتظار المراجعة</h3>
         <table id="pendingTable">
@@ -63,6 +83,7 @@
         <textarea id="bulkInput" placeholder="الصق هنا.. لا يهم إذا بدأ السطر بالاسم أو الإيميل"></textarea>
         <div class="controls">
             <button class="btn btn-upload" onclick="superSmartBulkAdd()">بدء المعالجة والرفع 🚀</button>
+            <button class="btn btn-copy" onclick="copyAllStudents()">📋 نسخ الكل (الاسم والإيميل سطر بسطر)</button>
             <button class="btn btn-delete-all" onclick="deleteAllStudents()">حذف الكل (المعتمدين) 🗑️</button>
         </div>
     </div>
@@ -84,7 +105,7 @@
             <tr>
                 <th>الاسم</th>
                 <th>البريد الإلكتروني</th>
-                <th>الإجراء</th>
+                <th>الإجراءات</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -108,7 +129,7 @@
         const pendingTbody = document.querySelector("#pendingTable tbody");
         const pendingSection = document.getElementById("pendingSection");
 
-        // 1. مراقبة جدول الطلاب المعتمدين (الذي يقرأ منه الاختبار)
+        // 1. مراقبة جدول الطلاب المعتمدين[span_1](start_span)[span_1](end_span)
         db.collection("allowed_students").orderBy("name").onSnapshot((snapshot) => {
             let approvedCount = snapshot.size;
             approvedTbody.innerHTML = "";
@@ -117,17 +138,37 @@
             snapshot.forEach((doc) => {
                 const data = doc.data();
                 const email = doc.id;
-                approvedTbody.innerHTML += `
-                    <tr>
-                        <td>${data.name}</td>
-                        <td>${email}</td>
-                        <td><button class="btn-reject" onclick="deleteAllowed('${email}')">🗑️ حذف</button></td>
-                    </tr>`;
+                const name = data.name || "";
+                
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-name', name);
+                tr.setAttribute('data-email', email);
+
+                tr.innerHTML = `
+                    <td class="name-cell"></td>
+                    <td class="email-cell"></td>
+                    <td>
+                        <select class="action-select" onchange="handleAction(this, '${email}', '${name.replace(/'/g, "\\'")}')">
+                            <option value="" disabled selected>⚙️ خيارات الإجراء</option>
+                            <option value="copy_email">📧 نسخ الإيميل</option>
+                            <option value="edit_email">✏️ تعديل الإيميل</option>
+                            <option value="copy_name">📋 نسخ الاسم</option>
+                            <option value="edit_name">✏️ تعديل الاسم</option>
+                            <option value="copy_both">📑 نسخ الكل (الاسم والإيميل)</option>
+                            <option value="delete">🗑️ حذف الطالب</option>
+                        </select>
+                    </td>
+                `;
+
+                tr.querySelector('.name-cell').textContent = name;
+                tr.querySelector('.email-cell').textContent = email;
+
+                approvedTbody.appendChild(tr);
             });
             searchStudents();
         });
 
-        // 2. مراقبة جدول الطلبات المعلقة (قائمة الانتظار)
+        // 2. مراقبة جدول الطلبات المعلقة[span_2](start_span)[span_2](end_span)
         db.collection("pending_students").orderBy("name").onSnapshot((snapshot) => {
             let pendingCount = snapshot.size;
             pendingTbody.innerHTML = "";
@@ -150,36 +191,109 @@
         });
     }
 
-    // دالة قبول الطالب (تنقله من الانتظار إلى مجموعة المعتمدين للاختبار)
+    // إدارة اختيار القائمة المنسدلة بالترتيب المطلوب[span_3](start_span)[span_3](end_span)
+    function handleAction(selectElement, email, currentName) {
+        const action = selectElement.value;
+        selectElement.value = ""; // إرجاع القائمة للخيار الافتراضي فوراً
+
+        if (action === 'copy_email') {
+            copyText(email);
+        } else if (action === 'edit_email') {
+            editStudentEmail(email, currentName);
+        } else if (action === 'copy_name') {
+            copyText(currentName);
+        } else if (action === 'edit_name') {
+            editStudentName(email, currentName);
+        } else if (action === 'copy_both') {
+            copyText(`${currentName}\n${email}`);
+        } else if (action === 'delete') {
+            deleteAllowed(email);
+        }
+    }
+
+    async function copyText(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (err) {
+            alert("فشل النسخ تلقائياً.");
+        }
+    }
+
+    // دالة تعديل اسم الطالب
+    async function editStudentName(email, currentName) {
+        const newName = prompt("أدخل الاسم الجديد للطالب:", currentName);
+        if (newName === null) return;
+        const trimmedName = newName.trim();
+        if (!trimmedName) {
+            alert("لا يمكن ترك الاسم فارغاً.");
+            return;
+        }
+
+        try {
+            await db.collection("allowed_students").doc(email).update({
+                name: trimmedName
+            });
+        } catch (error) {
+            alert("حدث خطأ أثناء تحديث الاسم.");
+        }
+    }
+
+    // دالة تعديل البريد الإلكتروني للطالب
+    async function editStudentEmail(currentEmail, currentName) {
+        const newEmailInput = prompt("أدخل البريد الإلكتروني الجديد للطالب:", currentEmail);
+        if (newEmailInput === null) return;
+        const newEmail = newEmailInput.trim().toLowerCase();
+
+        if (!newEmail || !newEmail.includes('@')) {
+            alert("يرجى إدخال بريد إلكتروني صحيح.");
+            return;
+        }
+
+        if (newEmail === currentEmail) return;
+
+        try {
+            const docCheck = await db.collection("allowed_students").doc(newEmail).get();
+            if (docCheck.exists) {
+                alert("هذا البريد الإلكتروني موجود مسبقاً لقالب طالب آخر!");
+                return;
+            }
+
+            await db.collection("allowed_students").doc(newEmail).set({
+                name: currentName,
+                added_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            await db.collection("allowed_students").doc(currentEmail).delete();
+            alert("تم تعديل الإيميل بنجاح!");
+        } catch (error) {
+            alert("حدث خطأ أثناء تحديث الإيميل.");
+        }
+    }
+
     async function approveStudent(email, name) {
         try {
-            // أضافته لمجموعة المعتمدين التي يقرأ منها الاختبار
             await db.collection("allowed_students").doc(email).set({
                 name: name,
                 added_at: firebase.firestore.FieldValue.serverTimestamp()
             });
-            // حذفه من قائمة الانتظار
             await db.collection("pending_students").doc(email).delete();
         } catch (error) {
             alert("حدث خطأ أثناء الموافقة.");
         }
     }
 
-    // حذف طالب من المعلقين (رفض)
     async function deletePending(email) {
         if(confirm(`رفض وحذف ${email} من قائمة الانتظار؟`)) {
             await db.collection("pending_students").doc(email).delete();
         }
     }
 
-    // حذف طالب من المعتمدين
     async function deleteAllowed(email) {
         if(confirm(`حذف ${email} من الطلاب المعتمدين؟`)) {
             await db.collection("allowed_students").doc(email).delete();
         }
     }
 
-    // دالة الرفع الجماعي (تضيف مباشرة للمعتمدين)
     async function superSmartBulkAdd() {
         const input = document.getElementById("bulkInput").value.trim();
         if(!input) return alert("يرجى لصق البيانات");
@@ -217,6 +331,31 @@
             document.getElementById("bulkInput").value = "";
         } else {
             alert("تنسيق غير معروف. تأكد من وجود الاسم والإيميل في سطرين متتاليين.");
+        }
+    }
+
+    async function copyAllStudents() {
+        const rows = document.querySelectorAll("#studentsTable tbody tr");
+        if(rows.length === 0) return alert("لا يوجد طلاب معتمدون للنسخ.");
+
+        let textToCopy = "";
+        rows.forEach(row => {
+            if (row.style.display !== "none") {
+                const name = row.getAttribute("data-name");
+                const email = row.getAttribute("data-email");
+                if(name && email) {
+                    textToCopy += `${name}\n${email}\n`;
+                }
+            }
+        });
+
+        if(!textToCopy) return alert("لا توجد بيانات مطابقة للنسخ.");
+
+        try {
+            await navigator.clipboard.writeText(textToCopy.trim());
+            alert("تم نسخ جميع الطلاب (الاسم والإيميل سطر بسطر) إلى الحافظة بنجاح! 📋");
+        } catch (err) {
+            alert("فشل النسخ تلقائياً، يرجى المحاولة مرة أخرى.");
         }
     }
 
